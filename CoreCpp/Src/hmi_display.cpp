@@ -57,12 +57,17 @@ void HMI_Callback() {
     }
 }
 
-void HMI_Transmit(char *msg) {
-    HAL_UART_Transmit(__huart, (uint8_t *)msg, strlen(msg), 500);
+void HMI_Transmit(char *msg_) {
+    HAL_UART_Transmit(__huart, (uint8_t *)msg_, strlen(msg_), 500);
 }
 
 void HMI_TXT_Transmit(uint32_t uint32_num, uint32_t id) {
     sprintf(msg, "t%d.txt=\"%d\"" "\xff\xff\xff", (int)id, (int)(uint32_num));
+    HMI_Transmit(msg);
+}
+
+void HMI_TXT_Transmit(const char *msg_, uint32_t id) {
+    sprintf(msg, "t%d.txt=\"%s\"" "\xff\xff\xff", (int)id, msg_);
     HMI_Transmit(msg);
 }
 

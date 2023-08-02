@@ -20,11 +20,12 @@ float32_t MAIN_determine_fc();
 float32_t MAIN_determine_fs(float32_t fc);
 float32_t MAIN_determine_ma(float32_t fs);
 float32_t MAIN_determine_mf(float32_t fs, float32_t &delta_f);
-uint8_t MAIN_determine_analog_modulation(float32_t fs);
+uint8_t MAIN_determine_analog_modulation(float32_t fs, float32_t &freq_use);
 void MAIN_determine_dds(float32_t fc);
 uint8_t MAIN_determine_psk_rate(Sigvector<uint16_t> &vec, float32_t fs, float32_t &rate);
 uint8_t MAIN_determine_fsk_ask(const float32_t *f_data);
 uint8_t MAIN_determine_digital_modulation(float32_t fs, float32_t &rate);
+float32_t MAIN_measure_fsk_h(float32_t rate);
 
 
 int main_cpp_analog_result() {
@@ -40,7 +41,8 @@ int main_cpp_analog_result() {
 //        MAIN_determine_dds(fc);
 //        float32_t fs = MAIN_determine_fs(fc);
         float32_t fs = 320e3;   // 240e3
-        uint8_t is_am = MAIN_determine_analog_modulation(fs);
+        float32_t freq_use = 0;
+        uint8_t is_am = MAIN_determine_analog_modulation(fs, freq_use);
 
         if (is_am == 1) {
             float32_t ma = MAIN_determine_ma(fs);
@@ -64,30 +66,6 @@ int main_cpp_analog_result() {
     return 0;
 }
 
-int main_cpp_test_mid() {
-    RETARGET_Init(&huart1);
-    ADC_CAPTURE_Init(&hadc1, &htim8);   // 带同采样PC4
-    ADC_EXTCAPTURE_Init(&hadc3, &hi2c3);
-    AD9910_Init();
-
-    while (true) {
-
-        float32_t fs = 240e3;
-
-//        float32_t ma = MAIN_determine_ma(fs);     // AM
-//        printf("ma: %d", (int)(ma * 1000));
-
-//        float32_t delta_f = 0;                    // FM
-//        float32_t mf = MAIN_determine_mf(fs, delta_f);
-//        printf("mf: %d delta f: %d", (int)(mf * 1000), (int)delta_f);
-
-        MAIN_determine_analog_modulation(fs);
-        printf("\n\n");
-        HAL_Delay(500);
-    }
-    return 0;
-}
-
 int main_cpp() {
     RETARGET_Init(&huart1);
     ADC_CAPTURE_Init(&hadc1, &htim8);   // 带通采样PC4
@@ -97,21 +75,112 @@ int main_cpp() {
         float32_t fs = 320e3;
         float32_t rate = 0;
         uint32_t digital_type = MAIN_determine_digital_modulation(fs, rate);
-        if (digital_type == 0) {
-            printf("ASK rate: %d", (int)rate);
-        }
-        else if (digital_type == 1) {
-            printf("FSK rate: %d", (int)rate);
-        }
-        else if(digital_type == 2) {
-            printf("PSK rate: %d", (int)rate);
-        }
+        MAIN_measure_fsk_h(rate);
+//        if (digital_type == 0) {
+//            printf("ASK rate: %d", (int)rate);
+//        }
+//        else if (digital_type == 1) {
+//            printf("FSK rate: %d", (int)rate);
+//        }
+//        else if(digital_type == 2) {
+//            printf("PSK rate: %d", (int)rate);
+//        }
         printf("\n\n");
         HAL_Delay(500);
     }
     return 0;
 }
 
+int main_cpp_hmi()  {
+    RETARGET_Init(&huart1);
+    ADC_CAPTURE_Init(&hadc1, &htim8);   // 带通采样PC4
+    HMI_Init(&huart3);
+    uint8_t mode_select = 0;
+    while (true) {
+//        printf("hello, world\n");
+        HMI_Mode(mode_select);
+        if (mode_select == 1) {     // analog
+            double receive_num = 0;
+            HMI_Receive_num(receive_num);
+            if (std::abs(receive_num - 1) < 1e-3) {
+                float32_t fs = 320e3;   // 240e3
+                float32_t freq_use = 0;
+                uint8_t is_am = MAIN_determine_analog_modulation(fs, freq_use);
+
+                char msg[50] = {0};
+                if (is_am == 1) {
+                    float32_t ma = MAIN_determine_ma(fs);
+                    HMI_TXT_Transmit("ANALOG MODULATION: AM", 0);
+                    sprintf(msg, "MA: %d", (int)std::round(ma * 1000));
+                    HMI_TXT_Transmit(msg, 1);
+                    sprintf(msg, "FREQ: %d", (int)std::round(freq_use));
+                    HMI_TXT_Transmit(msg, 2);
+                }
+                else if (is_am == 0) {
+                    float32_t delta_f = 0;
+                    float32_t mf = MAIN_determine_mf(fs, delta_f);
+                    HMI_TXT_Transmit("ANALOG MODULATION: FM", 0);
+                    sprintf(msg, "MF: %d    DEV: %d", (int)std::round(mf * 1000), (int)std::round(freq_use * mf));
+                    HMI_TXT_Transmit(msg, 1);
+
+                    sprintf(msg, "FREQ: %d", (int)std::round(freq_use));
+                    HMI_TXT_Transmit(msg, 2);
+//                    printf("mf: %d    delta_f: %d", int(mf * 100), int(delta_f));
+                }
+                else if (is_am == 2) {
+                    HMI_TXT_Transmit("CW", 0);
+                    HMI_TXT_Transmit("CW", 1);
+                    HMI_TXT_Transmit("CW", 2);
+                }
+            }
+        }
+        else if (mode_select == 2) {     // digital
+            double receive_num = 0;
+            HMI_Receive_num(receive_num);
+            if (std::abs(receive_num - 1) < 1e-3) {
+                float32_t fs = 320e3;
+                float32_t rate = 0;
+                uint32_t digital_type = MAIN_determine_digital_modulation(fs, rate);
+
+                char msg[50] = {0};
+                if (digital_type == 0) {
+                    HMI_TXT_Transmit("DIGITAL MODULATION: ASK", 0);
+                    sprintf(msg, "rate: %d", (int)std::round(rate));
+                    HMI_TXT_Transmit(msg, 1);
+                }
+                else if (digital_type == 1) {
+                    // 这里在测量h
+                    HMI_TXT_Transmit("DIGITAL MODULATION: FSK", 0);
+                    sprintf(msg, "rate: %d", (int)std::round(rate));
+                    HMI_TXT_Transmit(msg, 1);
+                }
+                else if (digital_type == 2) {
+                    HMI_TXT_Transmit("DIGITAL MODULATION: PSK", 0);
+                    sprintf(msg, "rate: %d", (int)std::round(rate));
+                    HMI_TXT_Transmit(msg, 1);
+                }
+
+            }
+        }
+
+//        else if (mode_select == 3) {
+//            double receive_num = 0;
+//            HMI_Receive_num(receive_num);
+//            if (std::abs(receive_num - 1) < 1e-3) {
+//                ADC3_EXTCAPTURE_Capture((uint16_t *)adc_value, SAMPLE, 30e3);
+//                Sigvector vec((uint16_t *)adc_value, (float32_t *)float_data,
+//                              (float32_t *)fft_mag, SAMPLE);
+//                vec.fft("hann");
+//
+//
+//                HMI_Refresh(3);
+//                HMI_LINE_Transmit((float32_t *)fft_mag, 2048, 2048, 1e6);
+//            }
+//        }
+        HAL_Delay(100);
+    }
+    return 0;
+}
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
     if (hadc->Instance == ADC3) {
@@ -238,7 +307,7 @@ float32_t MAIN_determine_mf(float32_t fs, float32_t &delta_f) {
  * @param fs
  * @return am return 1, fm return 0, no peaks 3
  */
-uint8_t MAIN_determine_analog_modulation(float32_t fs) {
+uint8_t MAIN_determine_analog_modulation(float32_t fs, float32_t &freq_use) {
     ADC1_CAPTURE_Capture((uint16_t *)adc_value, SAMPLE, (uint32_t)fs);
     Sigvector vec((uint16_t *)adc_value, (float32_t *)float_data,
                      (float32_t *)fft_mag, SAMPLE);
@@ -247,11 +316,20 @@ uint8_t MAIN_determine_analog_modulation(float32_t fs) {
 
 
 
-    vec.select_peaks();
+    vec.select_peaks(0.02, 1.5);
 
-//    vec.fft_print();
-//    printf("\n");
-//    vec.peaks_print();
+    uint32_t i = 0;
+    for (i = 0; i < vec.peaks_len(); ++i) {
+        uint32_t peak_max_val = vec.peaks(0, 0);
+        uint32_t peaks_val_i = vec.peaks(i, 1);
+        if (peaks_val_i == peak_max_val) {
+            break;  // i is peaks' index which is max val
+        }
+    }
+    float32_t freq_l = vec.cal_freq(vec.peaks(i, 1), fs);   // 使用能量重心校正
+    float32_t freq_h = vec.cal_freq(vec.peaks(i + 1, 1), fs);
+    freq_use = freq_h - freq_l;
+
 
     uint32_t len_peaks = vec.peaks_len();   // am调制
     if (len_peaks > 2 && len_peaks < 6) {    // 3、4或5个极值点   // 下策
@@ -289,10 +367,13 @@ uint8_t MAIN_determine_psk_rate(Sigvector<uint16_t> &vec, float32_t fs, float32_
             break;  // i is peaks' index which is max val
         }
     }
-    float32_t delta_freq = (float32_t)(vec.peaks(i + 1, 1) - vec.peaks(i, 1))
-            * fs / (float32_t)SAMPLE;
+    float32_t freq_l = vec.cal_freq(vec.peaks(i, 1), fs);   // 使用能量重心校正
+    float32_t freq_h = vec.cal_freq(vec.peaks(i + 1, 1), fs);
+//    float32_t delta_freq = (float32_t)(vec.peaks(i + 1, 1) - vec.peaks(i, 1))
+//            * fs / (float32_t)SAMPLE;
+    float32_t delta_freq = freq_h - freq_l;
 //    printf("delta freq: %d\n", (int)delta_freq);
-    if (delta_freq > 5.5e3) {
+    if (delta_freq > 5.5e3) {   // large delta freq, must psk
         rate = delta_freq / 2;
         return 1;
     }
@@ -332,11 +413,12 @@ uint8_t MAIN_determine_digital_modulation(float32_t fs, float32_t &rate) {
 
     vec.fft("hann");    // 联调的时候去掉
 //        vec.print();
+//    vec.print();
 
 //        vec.fft_print();
 
     uint8_t mod_type = MAIN_determine_psk_rate(vec, fs, rate);
-    if (mod_type == 0) {
+    if (mod_type == 0) {    // ASK 或 FSK
         uint8_t ask_fsk = MAIN_determine_fsk_ask((float32_t *)float_data);
         if (ask_fsk == 0) {
 //            printf("ASK ");
@@ -346,11 +428,23 @@ uint8_t MAIN_determine_digital_modulation(float32_t fs, float32_t &rate) {
 //            printf("FSK ");
             return 1;
         }
-        printf("rate: %d", (int)rate);
+//        printf("rate: %d", (int)rate);
     }
     else if (mod_type == 1) {
 //        printf("PSK rate: %d", (int)rate);
         return 2;
     }
     return 3;
+}
+
+float32_t MAIN_measure_fsk_h(float32_t rate) {
+    float32_t measure_h_fs = 120e3;
+    auto measure_h_num = (uint32_t)std::round(4 * measure_h_fs / rate);   // 采4个码率
+    ADC1_CAPTURE_Capture((uint16_t *)adc_value, measure_h_num, (uint32_t)measure_h_fs);
+    Sigvector measure_h_vec((uint16_t *)adc_value, (float32_t *)float_data,
+                  (float32_t *)fft_mag, measure_h_num);
+
+    measure_h_vec.fft("hann");      // default rectangle win and center
+    measure_h_vec.fft_print();
+    return 0;
 }

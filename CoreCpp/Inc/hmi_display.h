@@ -20,6 +20,7 @@ void HMI_Callback();
 void HMI_Transmit(char *msg);
 
 void HMI_TXT_Transmit(uint32_t uint32_num, uint32_t id);
+void HMI_TXT_Transmit(const char *msg_, uint32_t id);
 
 void HMI_WAVE_Transmit(uint8_t val, uint8_t channel, uint32_t id);
 void HMI_WAVE_Transmit(const uint8_t *val_array, uint32_t len, uint8_t channel, uint32_t id);
