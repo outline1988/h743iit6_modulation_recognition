@@ -10,6 +10,7 @@
 #include "sigvector_am.h"
 #include "hmi_display.h"
 #include "vca821_hand.h"
+#include "gpio_control.h"
 
 #define SAMPLE (4096)
 __attribute__((section ("._dma_buffer"))) volatile uint16_t adc_value[SAMPLE];
@@ -92,11 +93,19 @@ int main_cpp_new_way() {
     return 0;
 }
 
-int main_cpp_hmi()  {
+int main_cpp()  {
     RETARGET_Init(&huart1);
-    ADC_CAPTURE_Init(&hadc1, &htim8);   // 带通采样PC4
+    ADC_CAPTURE_Init(&hadc1, &htim8, &hadc2);   // 带通采样PC4
     ADC_EXTCAPTURE_Init(&hadc3, &hi2c3);
     HMI_Init(&huart3);
+
+
+    Vca821_hand vca821_instance(&hdac1, DAC1_CHANNEL_1);
+    vca821_instance.set_gainvalue(1 / 2.28 * 25);  // initial gain
+
+    Gpio_control digital_fm_am(GPIOC, GPIO_PIN_5, GPIOA, GPIO_PIN_3);
+    Gpio_control psk_fsk_ask(GPIOA, GPIO_PIN_7, GPIOG, GPIO_PIN_3);
+
     uint8_t mode_select = 0;
     while (true) {
 //        printf("hello, world\n");
@@ -117,6 +126,9 @@ int main_cpp_hmi()  {
                     HMI_TXT_Transmit(msg, 1);
                     sprintf(msg, "FREQ: %d", (int)std::round(freq_use));
                     HMI_TXT_Transmit(msg, 2);
+                    if (digital_fm_am.get_command() != 0b10) {
+                        digital_fm_am.write(0b10);
+                    }
                 }
                 else if (is_am == 0) {
                     float32_t delta_f = 0;
@@ -127,7 +139,9 @@ int main_cpp_hmi()  {
 
                     sprintf(msg, "FREQ: %d", (int)std::round(freq_use));
                     HMI_TXT_Transmit(msg, 2);
-//                    printf("mf: %d    delta_f: %d", int(mf * 100), int(delta_f));
+                    if (digital_fm_am.get_command() != 0b01) {
+                        digital_fm_am.write(0b01);
+                    }
                 }
                 else if (is_am == 2) {
                     HMI_TXT_Transmit("CW", 0);
@@ -150,6 +164,10 @@ int main_cpp_hmi()  {
                     sprintf(msg, "rate: %d", (int)std::round(rate));
                     HMI_TXT_Transmit(msg, 1);
                     HMI_TXT_Transmit(" ", 2);
+                    if (digital_fm_am.get_command() != 0b00 || psk_fsk_ask.get_command() != 0b10) {
+                        digital_fm_am.write(0b00);
+                        psk_fsk_ask.write(0b10);
+                    }
                 }
                 else if (digital_type == 1) {
                     // 这里在测量h
@@ -159,15 +177,26 @@ int main_cpp_hmi()  {
                     HMI_TXT_Transmit(msg, 1);
                     sprintf(msg, "h: %d", (int)std::round(fsk_h * 1000));
                     HMI_TXT_Transmit(msg, 2);
+                    if (digital_fm_am.get_command() != 0b00 || psk_fsk_ask.get_command() != 0b01) {
+                        digital_fm_am.write(0b00);
+                        psk_fsk_ask.write(0b01);
+                    }
                 }
                 else if (digital_type == 2) {
                     HMI_TXT_Transmit("DIGITAL MODULATION: PSK", 0);
                     sprintf(msg, "rate: %d", (int)std::round(rate));
                     HMI_TXT_Transmit(msg, 1);
                     HMI_TXT_Transmit(" ", 2);
+                    if (digital_fm_am.get_command() != 0b00 || psk_fsk_ask.get_command() != 0b00) {
+                        digital_fm_am.write(0b00);
+                        psk_fsk_ask.write(0b00);
+                    }
                 }
 
             }
+        }
+        if (mode_select != 0) {
+            MAIN_AGC_agc(vca821_instance);
         }
 
 //        else if (mode_select == 3) {
@@ -189,13 +218,14 @@ int main_cpp_hmi()  {
     return 0;
 }
 
-int main_cpp() {
+int main_cpp_() {
     RETARGET_Init(&huart1);
     ADC_CAPTURE_Init(&hadc1, &htim8, &hadc2);   // 带通采样PC4
     ADC_EXTCAPTURE_Init(&hadc3, &hi2c3);
     Vca821_hand vca821_instance(&hdac1, DAC1_CHANNEL_1);
     vca821_instance.set_gainvalue(1 / 2.28 * 25);  // initial gain
-
+//    Gpio_control digital_fm_am(GPIOI, GPIO_PIN_11, GPIOC, GPIO_PIN_5);
+//    Gpio_control psk_fsk_ask(GPIOG, GPIO_PIN_3, GPIOA, GPIO_PIN_7);
     while (true) {
         MAIN_AGC_agc(vca821_instance);
 
@@ -540,3 +570,5 @@ void MAIN_AGC_agc(Vca821_hand &vca821_instance) {
         vca821_instance.update_gain(vpp_now, vpp_ref, 1);
     }
 }
+
+
