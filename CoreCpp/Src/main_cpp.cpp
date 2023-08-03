@@ -11,10 +11,11 @@
 #include "hmi_display.h"
 
 #define SAMPLE (4096)
-__attribute__((section ("._dma_buffer"))) volatile uint16_t adc_value[SAMPLE * 4];
-__attribute__((section ("._dma_buffer"))) volatile float32_t float_data[SAMPLE * 4];
-__attribute__((section ("._dma_buffer"))) volatile float32_t fft_mag[SAMPLE * 4];
-//__attribute__((section ("._dma_buffer"))) volatile float32_t measure_h_adc_value[SAMPLE];
+__attribute__((section ("._dma_buffer"))) volatile uint16_t adc_value[SAMPLE];
+__attribute__((section ("._dma_buffer"))) volatile float32_t float_data[SAMPLE];
+__attribute__((section ("._dma_buffer"))) volatile float32_t fft_mag[SAMPLE];
+
+//__attribute__((section ("._dma_buffer"))) volatile struct compx adc_value_complex[SAMPLE * 4];
 
 float32_t MAIN_determine_fc();
 float32_t MAIN_determine_fs(float32_t fc);
@@ -66,28 +67,14 @@ int main_cpp_analog_result() {
     return 0;
 }
 
-int main_cpp_ad() {
+int main_cpp_() {
     RETARGET_Init(&huart1);
     ADC_CAPTURE_Init(&hadc1, &htim8);   // 带通采样PC4
     ADC_EXTCAPTURE_Init(&hadc3, &hi2c3);
 
     while (true) {
-//        float32_t measure_h_fs = 4.5e6;
-        float32_t a = MAIN_measure_fsk_h(1000);
-        printf("%d", (int)a);
-//        uint32_t digital_type = MAIN_determine_digital_modulation(fs, rate);
-
-
-
-//        if (digital_type == 0) {
-//            printf("ASK rate: %d", (int)rate);
-//        }
-//        else if (digital_type == 1) {
-//            printf("FSK rate: %d", (int)rate);
-//        }
-//        else if(digital_type == 2) {
-//            printf("PSK rate: %d", (int)rate);
-//        }
+        float32_t rate = 1;
+        MAIN_measure_fsk_h(rate);
         printf("\n\n");
         HAL_Delay(500);
     }
@@ -464,3 +451,34 @@ float32_t MAIN_measure_fsk_h(float32_t rate) {
     float32_t f_diff = std::abs(measure_h_freq1 - measure_h_freq2);
     return f_diff / rate;
 }
+
+// // 大点数fft测h，试过了没用
+//float32_t MAIN_measure_fsk_h(float32_t rate) {
+//    float32_t measure_h_fs = 4.5e6;
+//    uint32_t measure_fsk_h_num = 4 * SAMPLE;
+//    ADC3_EXTCAPTURE_Capture((uint16_t *)adc_value, measure_fsk_h_num, (uint32_t)measure_h_fs);
+//    Sigvector measure_h_vec((uint16_t *)adc_value, (float32_t *)float_data,
+//                            (float32_t *)fft_mag, SAMPLE * 4);
+//    float32_t adc_value_mean = measure_h_vec.mean();
+//    for (uint32_t i = 0; i < measure_fsk_h_num; ++i) {
+//        adc_value_complex[i].real = (float32_t)adc_value[i] - adc_value_mean;
+//        adc_value_complex[i].real *= 0.5 * (1 - arm_cos_f32(2 * PI * (float32_t)i / (float32_t)(measure_fsk_h_num - 1)));
+//        adc_value_complex[i].imag = 0;
+//    }
+//    cfft((struct compx *)adc_value_complex, measure_fsk_h_num);
+//    for (uint32_t i = 0; i < measure_fsk_h_num / 2; ++i) {
+//        arm_sqrt_f32((float32_t)(adc_value_complex[i].real * adc_value_complex[i].real +
+//                                 adc_value_complex[i].imag * adc_value_complex[i].imag),
+//                            (float32_t *)&fft_mag[i]);
+//    }
+//    measure_h_vec.fft_sort_index();
+////    measure_h_vec.fft_print();
+//    uint32_t max1_peaks_index = measure_h_vec.find_k_index(0);
+//    uint32_t max2_peaks_index = measure_h_vec.find_k_index(1);
+////        float32_t measure_h_freq1 = (float32_t)max1_peaks_index * measure_h_fs / SAMPLE;
+////        float32_t measure_h_freq2 = (float32_t)max2_peaks_index * measure_h_fs / SAMPLE;
+//    float32_t measure_h_freq1 = measure_h_vec.cal_freq(max1_peaks_index, measure_h_fs, 1);
+//    float32_t measure_h_freq2 = measure_h_vec.cal_freq(max2_peaks_index, measure_h_fs, 1);
+//    float32_t f_diff = std::abs(measure_h_freq1 - measure_h_freq2);
+//    return f_diff / rate;
+//}

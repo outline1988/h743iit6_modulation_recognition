@@ -29,6 +29,7 @@ extern "C" {
 #include "retarget.h"
 #include "SI5351.h"
 #include "AD9910.h"
+#include "FFTInc.h"
 
 int main_cpp();
 

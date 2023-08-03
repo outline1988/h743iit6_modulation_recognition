@@ -39,6 +39,7 @@ public:
     void fft_input(float32_t *fft_data, float32_t *fft_mag);    // 为fft提供存储的数组，初始化添加了这里就不用添加了
 
     void fft(const std::string &win = "rec", uint8_t center_flag = 1);  // just call this function to fft
+    void fft_sort_index();
 
     uint32_t find_k_index(uint32_t k) { return (uint32_t)fft_mag[len / 2 + k]; }    // 找到最大值所在的下标
     float32_t cal_freq(uint32_t index, float32_t f_s,  uint32_t side_num = 3);
@@ -72,7 +73,6 @@ protected:
 
     void fft_win(const std::string &win, uint8_t center_flag);         // 预处理，加窗或中心化
     void fft_();     // 直接做fft
-    void fft_sort_index();
 };
 
 
