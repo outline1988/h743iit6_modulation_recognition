@@ -16,6 +16,7 @@ extern "C" {
 // HAL Library Header
 #include "main.h"
 #include "adc.h"
+#include "dac.h"
 #include "dma.h"
 #include "i2c.h"
 #include "tim.h"

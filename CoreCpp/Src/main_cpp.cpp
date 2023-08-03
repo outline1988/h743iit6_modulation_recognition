@@ -9,6 +9,7 @@
 #include "sigvector_fm.h"
 #include "sigvector_am.h"
 #include "hmi_display.h"
+#include "vca821_hand.h"
 
 #define SAMPLE (4096)
 __attribute__((section ("._dma_buffer"))) volatile uint16_t adc_value[SAMPLE];
@@ -28,12 +29,13 @@ uint8_t MAIN_determine_fsk_ask(const float32_t *f_data);
 uint8_t MAIN_determine_digital_modulation(float32_t fs, float32_t &rate);
 float32_t MAIN_measure_fsk_h(float32_t rate);
 
+void MAIN_AGC_agc(Vca821_hand &vca821_instance);
+
 
 int main_cpp_analog_result() {
     RETARGET_Init(&huart1);
     ADC_CAPTURE_Init(&hadc1, &htim8);   // 带同采样PC4
     ADC_EXTCAPTURE_Init(&hadc3, &hi2c3);
-    AD9910_Init();
 
     while (true) {
 
@@ -67,21 +69,30 @@ int main_cpp_analog_result() {
     return 0;
 }
 
-int main_cpp_() {
+int main_cpp_new_way() {
     RETARGET_Init(&huart1);
     ADC_CAPTURE_Init(&hadc1, &htim8);   // 带通采样PC4
     ADC_EXTCAPTURE_Init(&hadc3, &hi2c3);
 
     while (true) {
-        float32_t rate = 1;
-        MAIN_measure_fsk_h(rate);
+        float32_t fs = 320e3;
+        ADC1_CAPTURE_Capture((uint16_t *)adc_value, SAMPLE, (uint32_t)fs);
+        Sigvector vec((uint16_t *)adc_value, (float32_t *)float_data,
+                      (float32_t *)fft_mag, SAMPLE);
+
+        vec.fft("hann");      // default rectangle win and center
+        vec.select_peaks(0.7, 1.5);
+        vec.peaks_print();
+//        vec.print();
+
+
         printf("\n\n");
         HAL_Delay(500);
     }
     return 0;
 }
 
-int main_cpp()  {
+int main_cpp_hmi()  {
     RETARGET_Init(&huart1);
     ADC_CAPTURE_Init(&hadc1, &htim8);   // 带通采样PC4
     ADC_EXTCAPTURE_Init(&hadc3, &hi2c3);
@@ -178,9 +189,37 @@ int main_cpp()  {
     return 0;
 }
 
+int main_cpp() {
+    RETARGET_Init(&huart1);
+    ADC_CAPTURE_Init(&hadc1, &htim8, &hadc2);   // 带通采样PC4
+    ADC_EXTCAPTURE_Init(&hadc3, &hi2c3);
+    Vca821_hand vca821_instance(&hdac1, DAC1_CHANNEL_1);
+    vca821_instance.set_gainvalue(1 / 2.28 * 25);  // initial gain
+
+    while (true) {
+        MAIN_AGC_agc(vca821_instance);
+
+
+//        ADC2_CAPTURE_Capture((uint16_t *)adc_value, SAMPLE, 30e3);
+//        Sigvector vec((uint16_t *)adc_value, (float32_t *)float_data,
+//                      (float32_t *)fft_mag, SAMPLE);
+//
+//        vec.fft("hann");      // default rectangle win and center
+//        vec.fft_print();
+
+        printf("\n\n");
+        HAL_Delay(100);
+    }
+    return 0;
+}
+
+
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
     if (hadc->Instance == ADC3) {
         ADC3_EXTCAPTURE_Callback();
+    }
+    if (hadc->Instance == ADC2) {
+        ADC2_CAPTURE_Callback();
     }
     if (hadc->Instance == ADC1) {
         ADC1_CAPTURE_Callback();
@@ -369,11 +408,11 @@ uint8_t MAIN_determine_psk_rate(Sigvector<uint16_t> &vec, float32_t fs, float32_
 //            * fs / (float32_t)SAMPLE;
     float32_t delta_freq = freq_h - freq_l;
 //    printf("delta freq: %d\n", (int)delta_freq);
-    if (delta_freq > 5.5e3) {   // large delta freq, must psk
+    if (delta_freq > 5.5e3) {   // large delta freq, must PSK
         rate = delta_freq;
         return 1;
     }
-    else {
+    else {  // ASK/FSK
         rate = delta_freq * 2;
         return 0;
     }
@@ -482,3 +521,22 @@ float32_t MAIN_measure_fsk_h(float32_t rate) {
 //    float32_t f_diff = std::abs(measure_h_freq1 - measure_h_freq2);
 //    return f_diff / rate;
 //}
+
+float32_t MAIN_AGC_get_vpp() {
+    float32_t fs = 12e3;
+    ADC2_CAPTURE_Capture((uint16_t *)adc_value, SAMPLE, (uint32_t)fs);
+    Sigvector vec((uint16_t *)adc_value, (float32_t *)float_data,
+                  (float32_t *)fft_mag, SAMPLE);
+    vec.fft("hann");
+
+    return vec.fft_vpp();
+}
+
+void MAIN_AGC_agc(Vca821_hand &vca821_instance) {
+    float32_t vpp_ref = 5e6;  // 现在还不知道vep_ref
+    float32_t vpp_now = MAIN_AGC_get_vpp();
+//    printf("%d", (int)(vpp_now));
+    if (std::abs(vpp_ref - vpp_now) / vpp_ref > 0.05) {
+        vca821_instance.update_gain(vpp_now, vpp_ref, 1);
+    }
+}
