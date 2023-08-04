@@ -34,45 +34,10 @@ uint8_t MAIN_NEW_determine_pskfsk_ask(const float32_t *f_data);
 void MAIN_NEW_ANALOG_MODE();
 void MAIN_NEW_DIGITAL_MODE();
 void MAIN_NEW_ANA_DIG_MODE();
+void MAIN_NEW_SPECTRUM();
 
-int main_cpp_analog_result() {
-    RETARGET_Init(&huart1);
-    ADC_CAPTURE_Init(&hadc1, &htim8);   // 带同采样PC4
-    ADC_EXTCAPTURE_Init(&hadc3, &hi2c3);
 
-    while (true) {
-
-//        float32_t fc = MAIN_determine_fc();
-//        printf("%d\n", (int)fc);
-//        MAIN_determine_dds(fc);
-//        float32_t fs = MAIN_determine_fs(fc);
-        float32_t fs = 320e3;   // 240e3
-        float32_t freq_use = 0;
-        uint8_t is_am = MAIN_determine_analog_modulation(fs, freq_use);
-
-        if (is_am == 1) {
-            float32_t ma = MAIN_determine_ma(fs);
-            printf("ma: %d", int(ma * 1000));
-        }
-        else if (is_am == 0) {
-            float32_t delta_f = 0;
-            float32_t mf = MAIN_determine_mf(fs, delta_f);
-            printf("mf: %d    delta_f: %d", int(mf * 100), int(delta_f));
-        }
-        else if (is_am == 2) {
-            printf("CW signal");
-        }
-        else {
-            printf("no peaks found");
-        }
-
-        printf("\n\n");
-        HAL_Delay(500);
-    }
-    return 0;
-}
-
-int main_cpp_() {
+int main_cpp__() {
     RETARGET_Init(&huart1);
     HMI_Init(&huart1);
     ADC_CAPTURE_Init(&hadc1, &htim8, &hadc2);   // 带通采样PC4
@@ -80,9 +45,15 @@ int main_cpp_() {
     AD9834_Init();
     AD9834_Select_Wave(Sine_Wave);
     AD9834_Set_Freq(FREQ_0, 2e6 + AD9834_2_FREQ_ERROR);
+    float32_t fs = 5e6;
     while (true) {
-        HMI_FSK_Transmit(500, 5);
-
+//        ADC3_EXTCAPTURE_Capture((uint16_t *)adc_value, SAMPLE, fs);
+//        Sigvector vec((uint16_t *)adc_value, (float32_t *)float_data,
+//                      (float32_t *)fft_mag, SAMPLE);
+//        vec.fft("hann");
+//        vec.fft_print();
+        float32_t fc = MAIN_determine_fc();
+        printf("fc: %d", (int)fc);
         printf("\n\n");
         HAL_Delay(500);
     }
@@ -137,6 +108,17 @@ int main_cpp()  {
                 AD9834_Set_Freq(FREQ_0, 2e6 + AD9834_2_FREQ_ERROR);
             }
         }   // CALIBRATION
+        else if (mode_select == 7) {
+            MAIN_NEW_SPECTRUM();
+        }
+        else if (mode_select == 8) {
+            float32_t fc = MAIN_determine_fc();
+            double receive_num = 0;
+            HMI_Receive_num(receive_num);
+            if (std::abs(receive_num - 1) < 1e-3) {
+                HMI_TXT_INT_Transmit(fc, 1);
+            }
+        }
         HAL_Delay(50);
     }
     return 0;
@@ -469,6 +451,22 @@ void MAIN_NEW_ANA_DIG_MODE() {
             MAIN_AGC_agc(vca821_instance);  // only analog should
         }   // ANALOG
     }
+}
 
+void MAIN_NEW_SPECTRUM() {
+    double receive_num = 0;
+    HMI_Receive_num(receive_num);
+    if (std::abs(receive_num - 1) < 1e-3) {
+        float32_t fs = 320e3;
+        ADC1_CAPTURE_Capture((uint16_t *)adc_value, SAMPLE, (uint32_t)fs);  // 联调的时候去掉
+        Sigvector vec((uint16_t *)adc_value, (float32_t *)float_data,
+                      (float32_t *)fft_mag, SAMPLE);
+        vec.fft("hann");
+
+
+        HMI_Refresh(5);
+        float32_t spetrum_max = fft_mag[vec.find_k_index(0)];
+        HMI_LINE_Transmit((float32_t *) fft_mag, 2048, 2048, spetrum_max);
+    }
 }
 

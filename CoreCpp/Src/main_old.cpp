@@ -110,7 +110,7 @@ void main_cpp_old(uint8_t &mode_select, Gpio_control &digital_fm_am, Gpio_contro
 float32_t MAIN_determine_fc() {
 //    uint32_t fs_remainder[3] = {(uint32_t)3.870968e6, (uint32_t)3.076923e6, (uint32_t)2.580645e6};
 //    uint32_t fs_remainder[3] = {(uint32_t)9.230769e6, (uint32_t)8.888889e6, (uint32_t)8.571429e6};  // danger
-    uint32_t fs_remainder[3] = {(uint32_t)7.272727e6, (uint32_t)7.058823e6, (uint32_t)6.857143e6};
+    uint32_t fs_remainder[3] = {(uint32_t)4.726812e6, (uint32_t)4.5731977e6, (uint32_t)4.321741e6};
 
 //    uint32_t fs_remainder[3] = {(uint32_t)10e3, (uint32_t)20e3, (uint32_t)40e3};
 //    uint32_t fs_remainder[2] = {(uint32_t)9.230769e6, (uint32_t)8.571429e6};
@@ -118,7 +118,7 @@ float32_t MAIN_determine_fc() {
 //    uint32_t fs_remainder[2] = {(uint32_t)7.058823e6, (uint32_t)8.888889e6};
     float32_t f_remainder[3] = {0};
     for (int i = 0; i < 3; ++i) {
-        ADC2_CAPTURE_Capture((uint16_t *)adc_value, SAMPLE, fs_remainder[i]);
+        ADC3_EXTCAPTURE_Capture((uint16_t *)adc_value, SAMPLE, fs_remainder[i]);
         Sigvector vec((uint16_t *)adc_value, (float32_t *)float_data,
                       (float32_t *)fft_mag, SAMPLE);
         vec.fft("hann");
@@ -152,9 +152,9 @@ float32_t MAIN_determine_fc() {
 //                float32_t error = std::abs(f1_perhaps[i] - f2_perhaps[j]);
                 float32_t x = f1_perhaps[i], y = f2_perhaps[j], z = f3_perhaps[k];
                 float32_t error = x * x + y * y + z * z - x * y - x * z - y * z;
-                if ((f1_perhaps[i] > 9.5e6 && f1_perhaps[i] < 30.5e6) &&
-                    (f2_perhaps[j] > 9.5e6 && f2_perhaps[j] < 30.5e6) &&
-                    (f3_perhaps[k] > 9.5e6 && f3_perhaps[k] < 30.5e6) &&
+                if ((f1_perhaps[i] > 0.5e6 && f1_perhaps[i] < 30.5e6) &&
+                    (f2_perhaps[j] > 0.5e6 && f2_perhaps[j] < 30.5e6) &&
+                    (f3_perhaps[k] > 0.5e6 && f3_perhaps[k] < 30.5e6) &&
                     error < error_min) {
                     error_min = error;
                     f1_result = f1_perhaps[i];
@@ -184,12 +184,17 @@ float32_t MAIN_determine_ma(float32_t fs) {
 //    ADC1_CAPTURE_Capture((uint16_t *)adc_value, SAMPLE, (uint32_t)fs);  // 联调的时候去掉
     Sigvector_am vec((uint16_t *)adc_value, (float32_t *)float_data,
                      (float32_t *)fft_mag, SAMPLE);
-
+//    vec.fft("flattop");
 //    vec.fft("hann");    // 联调的时候去掉
 
-    vec.select_peaks(0.02, 1.5);
+    vec.select_peaks(0.05, 1.5);
 
     float32_t ma = vec.cal_ma();
+    if (ma > 0.6) {
+        vec.fft("flattop");
+        vec.select_peaks(0.05, 1.5);
+        return vec.cal_ma();
+    }
     return ma;
 }
 

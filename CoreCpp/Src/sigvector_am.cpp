@@ -15,7 +15,7 @@ float32_t Sigvector_am::cal_ma() {
 //        if (temp_index < (len / 10)) {
 //            continue;
 //        }
-        dsb_vpp[j++] = fft_vpp(temp_index);
+        dsb_vpp[j++] = fft_vpp(temp_index, 1);
     }
     return (dsb_vpp[1] + dsb_vpp[2]) / dsb_vpp[0];
 }
