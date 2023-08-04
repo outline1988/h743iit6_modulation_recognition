@@ -168,5 +168,16 @@ void Sigvector_fm::fill_peak(float32_t *peak_index, uint32_t &len_peak_index) {
     }
 }
 
+float32_t Sigvector_fm::cal_fsk_h(float32_t fs, float32_t rate) {
+    uint32_t selected_peak_len = len_peaks;     // 不要后面的峰值，若要恢复需要再次调用find_peaks
+    const float32_t *const x = fft_mag;
+    float32_t *peaks_index = fft_mag + len / 2 + len / 4;   // 顺序峰值的下标
+    float32_t *selected_peak_index = peaks_index;
+
+
+    uint32_t center_index = find_center_index(selected_peak_index, selected_peak_len);
+    return std::abs((float32_t)center_index - 1024) * fs * 2 / (float32_t)len / rate;
+}
+
 
 

@@ -539,7 +539,7 @@ uint32_t Sigvector<T>::select_peaks(float32_t height_l_factor, float32_t height_
     }
     uint32_t len_diff_peaks = len_peaks - 1;
     std::sort(diff_peaks, diff_peaks + len_diff_peaks);
-    auto min_peak_distance = std::ceil((float32_t)(diff_peaks[len_diff_peaks / 2] * 0.5));  // 峰间距离的一半为阈值
+    auto min_peak_distance = std::ceil((float32_t)(diff_peaks[len_diff_peaks / 2] * 0.1));  // 峰间距离的一半为阈值
     find_peaks((uint32_t)min_peak_distance, 1, 0,
                height_l, height_h, 1, 0);    // 1k低频，12k频偏的参数
     return (uint32_t)diff_peaks[len_diff_peaks / 2];
@@ -630,6 +630,7 @@ float32_t Sigvector<T>::cal_freq_dtft(float32_t fs, uint32_t iter_times) {
     }
     return mid_w * fs / (2 * PI);
 }
+
 
 
 

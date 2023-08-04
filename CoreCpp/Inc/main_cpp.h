@@ -31,6 +31,8 @@ extern "C" {
 #include "SI5351.h"
 #include "AD9910.h"
 #include "FFTInc.h"
+#include "AD9854.h"
+#include "AD9834.h"
 
 int main_cpp();
 
