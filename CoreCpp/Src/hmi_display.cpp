@@ -6,6 +6,7 @@
 UART_HandleTypeDef *__huart = nullptr;
 uint8_t rx[10] = {0};
 char msg[50] = {0};
+char float_data_[50] = {0};
 
 void HMI_Init(UART_HandleTypeDef *huart) {
     __huart = huart;
@@ -68,6 +69,16 @@ void HMI_TXT_Transmit(uint32_t uint32_num, uint32_t id) {
 
 void HMI_TXT_Transmit(const char *msg_, uint32_t id) {
     sprintf(msg, "t%d.txt=\"%s\"" "\xff\xff\xff", (int)id, msg_);
+    HMI_Transmit(msg);
+}
+
+void HMI_TXT_FLOAT_Transmit(float32_t data, uint32_t id) {
+    sprintf(msg, "t%d.txt=\"%d.%d\"" "\xff\xff\xff", (int)id, (int)data, (int)std::round( (data - (int)data) * 1000 ) );
+    HMI_Transmit(msg);
+}
+
+void HMI_TXT_INT_Transmit(float32_t data, uint32_t id) {
+    sprintf(msg, "t%d.txt=\"%d\"" "\xff\xff\xff", (int)id, (int)std::round(data));
     HMI_Transmit(msg);
 }
 
@@ -171,4 +182,73 @@ void HMI_LINE_Transmit(const uint16_t *array, uint32_t len, uint32_t len_max, ui
 void HMI_Refresh(uint32_t page_id) {
     sprintf(msg, "page page%d" "\xff\xff\xff", (int)page_id);
     HMI_Transmit(msg);
+}
+
+void HMI_FSK_Transmit(float32_t rate, float32_t fsk_h) {
+    char msg__[50] = {0};
+    HMI_TXT_Transmit("DIGITAL MODULATION: FSK", 0);
+    sprintf(msg__, "rate: %d", (int)std::round(rate));
+    HMI_TXT_Transmit(msg__, 1);
+
+    ftoa((double)fsk_h, float_data_, 3);
+    sprintf(msg__, "h: %s", float_data_);
+    HMI_TXT_Transmit(msg__, 2);
+}
+void HMI_ASK_Transmit(float32_t rate) {
+    char msg__[50] = {0};
+    HMI_TXT_Transmit("DIGITAL MODULATION: ASK", 0);
+    sprintf(msg__, "rate: %d", (int)std::round(rate));
+    HMI_TXT_Transmit(msg__, 1);
+    HMI_TXT_Transmit(" ", 2);
+}
+void HMI_PSK_Transmit(float32_t rate) {
+    char msg__[50] = {0};
+    HMI_TXT_Transmit("DIGITAL MODULATION: PSK", 0);
+    sprintf(msg__, "rate: %d", (int)std::round(rate));
+    HMI_TXT_Transmit(msg__, 1);
+    HMI_TXT_Transmit(" ", 2);
+}
+void HMI_AM_Transmit(float32_t freq_use, float32_t ma) {
+    char msg__[50] = {0};
+    HMI_TXT_Transmit("ANALOG MODULATION: AM", 0);
+
+    ftoa((double)ma, float_data_, 3);
+    sprintf(msg__, "MA: %s", float_data_);
+    HMI_TXT_Transmit(msg__, 1);
+
+    sprintf(msg__, "FREQ: %d", (int)std::round(freq_use));
+    HMI_TXT_Transmit(msg__, 2);
+}
+void HMI_FM_Transmit(float32_t freq_use, float32_t mf) {
+    char msg__[50] = {0};
+    HMI_TXT_Transmit("ANALOG MODULATION: FM", 0);
+
+    ftoa((double)mf, float_data_, 3);
+    sprintf(msg__, "MF: %s    DEV: %d", float_data_, (int)std::round(freq_use * mf));
+    HMI_TXT_Transmit(msg__, 1);
+
+    sprintf(msg__, "FREQ: %d", (int)std::round(freq_use));
+    HMI_TXT_Transmit(msg__, 2);
+}
+void HMI_CW_Transmit() {
+    HMI_TXT_Transmit("CW", 0);
+    HMI_TXT_Transmit("CW", 1);
+    HMI_TXT_Transmit("CW", 2);
+}
+
+void ftoa(double f_num, char *msg, int point_num) {
+    int int_num = (int)f_num;
+    double point = (f_num - (double)int_num);
+    if (int_num == 0) {
+        msg[0] = '0';
+        msg[1] = '.';
+        int temp = (int)(point * (double)pow(10, point_num));
+        itoa((int)(temp), msg + 2, 10);
+    }
+    else {
+        int_num = (int_num + point / 10) * pow(10, point_num + 1);
+        itoa(int_num, msg, 10);
+        msg[strlen(msg) - point_num - 1] = '.';
+    }
+
 }
