@@ -193,7 +193,8 @@ float32_t MAIN_determine_ma(float32_t fs) {
     return ma;
 }
 
-float32_t MAIN_determine_mf(float32_t fs, float32_t &delta_f) {
+float32_t MAIN_determine_mf(float32_t fs, float32_t &delta_f, float32_t height_l, float32_t height_h,
+        float32_t min_peak_distance_factor) {
 //    ADC1_CAPTURE_Capture((uint16_t *)adc_value, SAMPLE, (uint32_t)fs);  // 联调的时候去掉
     Sigvector_fm vec((uint16_t *)adc_value, (float32_t *)float_data,
                      (float32_t *)fft_mag, SAMPLE);
@@ -203,7 +204,7 @@ float32_t MAIN_determine_mf(float32_t fs, float32_t &delta_f) {
 //    printf("\n");
 
 
-    uint32_t omega_index = vec.select_peaks();     // find_peaks is needed cause len_peaks should be updated in Sigvector_fm class.
+    uint32_t omega_index = vec.select_peaks(height_l, height_h, min_peak_distance_factor);     // find_peaks is needed cause len_peaks should be updated in Sigvector_fm class.
 
 
     float32_t mf = vec.cal_mf();
@@ -224,9 +225,9 @@ uint8_t MAIN_determine_analog_modulation(float32_t fs, float32_t &freq_use) {
 
     vec.fft("hann");      // default rectangle win and center
 
+//    vec.fft_print();
 
-
-    vec.select_peaks(0.02, 1.5);
+    vec.select_peaks();
 
     uint32_t i = 0;
     for (i = 0; i < vec.peaks_len(); ++i) {

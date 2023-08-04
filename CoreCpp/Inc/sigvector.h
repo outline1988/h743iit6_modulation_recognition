@@ -51,7 +51,7 @@ public:
                     float32_t threshold_l = 1, float32_t threshold_h = 0,
                     float32_t height_l = 2e5, float32_t height_h = 1e8,
                     float32_t plateau_size_l = 1, float32_t plateau_size_h = 0);
-    uint32_t select_peaks(float32_t height_l_factor = 0.02, float32_t height_h_factor = 1.5);
+    uint32_t select_peaks(float32_t height_l_factor = 0.02, float32_t height_h_factor = 1.5, float32_t min_peak_distance_factor = 0.1);
 
     uint32_t peaks(uint32_t k = 0, uint8_t order = 0); // default return max peak's index
     [[nodiscard]] uint32_t peaks_len() const { return len_peaks; }
@@ -518,7 +518,7 @@ void Sigvector<T>::peaks_print() {
  * @return the distance between peak, 0 means no peaks
  */
 template <class T>
-uint32_t Sigvector<T>::select_peaks(float32_t height_l_factor, float32_t height_h_factor) {
+uint32_t Sigvector<T>::select_peaks(float32_t height_l_factor, float32_t height_h_factor, float32_t min_peak_distance_factor) {
     float32_t *peaks = fft_mag + len / 2 + len / 4;
     float32_t *order_spectrum = fft_mag + len / 2;
     float32_t spectrum_max = fft_mag[(uint32_t)std::round(order_spectrum[0])];
@@ -539,7 +539,7 @@ uint32_t Sigvector<T>::select_peaks(float32_t height_l_factor, float32_t height_
     }
     uint32_t len_diff_peaks = len_peaks - 1;
     std::sort(diff_peaks, diff_peaks + len_diff_peaks);
-    auto min_peak_distance = std::ceil((float32_t)(diff_peaks[len_diff_peaks / 2] * 0.1));  // 峰间距离的一半为阈值
+    auto min_peak_distance = std::ceil((float32_t)(diff_peaks[len_diff_peaks / 2] * min_peak_distance_factor));  // 峰间距离的一半为阈值
     find_peaks((uint32_t)min_peak_distance, 1, 0,
                height_l, height_h, 1, 0);    // 1k低频，12k频偏的参数
     return (uint32_t)diff_peaks[len_diff_peaks / 2];

@@ -100,8 +100,6 @@ int main_cpp()  {
     HAL_Delay(500);
     AD9834_Init();
     AD9834_Select_Wave(Sine_Wave);
-//    AD9854_SINSet(2e6, 4095);
-//    SI5351_SetCLK2(2e6);
     AD9834_Set_Freq(FREQ_0, 2e6 + AD9834_FREQ_ERROR);
 
 
@@ -118,11 +116,55 @@ int main_cpp()  {
         HMI_Mode(mode_select);
         main_cpp_old(mode_select, digital_fm_am, psk_fsk_ask);
         if (mode_select == 3) {     // ANALOG
+            float32_t fs = 320e3;
+            double receive_num = 0;
+            HMI_Receive_num(receive_num);
+            if (std::abs(receive_num - 1) < 1e-3) {
+                float32_t freq_use = 0;
+                uint8_t is_am = MAIN_determine_analog_modulation(fs, freq_use);
 
-        }
+                char msg[50] = {0};
+                if (is_am == 1) {
+                    float32_t ma = MAIN_determine_ma(fs);
+                    HMI_TXT_Transmit("ANALOG MODULATION: AM", 0);
+                    sprintf(msg, "MA: %d", (int)std::round(ma * 1000));
+                    HMI_TXT_Transmit(msg, 1);
+                    sprintf(msg, "FREQ: %d", (int)std::round(freq_use));
+                    HMI_TXT_Transmit(msg, 2);
+                    if (digital_fm_am.get_command() != 0b10) {
+                        digital_fm_am.write(0b10);
+                    }
+                }
+                else if (is_am == 0) {
+                    float32_t delta_f = 0;
+                    float32_t mf = MAIN_determine_mf(fs, delta_f, 0.02, 1.5, 0.6);
+                    HMI_TXT_Transmit("ANALOG MODULATION: FM", 0);
+                    sprintf(msg, "MF: %d    DEV: %d", (int)std::round(mf * 1000), (int)std::round(freq_use * mf));
+                    HMI_TXT_Transmit(msg, 1);
+
+                    sprintf(msg, "FREQ: %d", (int)std::round(freq_use));
+                    HMI_TXT_Transmit(msg, 2);
+                    if (digital_fm_am.get_command() != 0b01) {
+                        digital_fm_am.write(0b01);
+                    }
+                }
+                else if (is_am == 2) {
+                    HMI_TXT_Transmit("CW", 0);
+                    HMI_TXT_Transmit("CW", 1);
+                    HMI_TXT_Transmit("CW", 2);
+                }
+                MAIN_AGC_agc(vca821_instance);  // only analog should
+            }
+        }   // ANALOG SIN
         else if (mode_select == 4) {    // DIGITAL
+            float32_t fs = 320e3;
+            float32_t rate = 0;
+            ADC1_CAPTURE_Capture((uint16_t *)adc_value, SAMPLE, (uint32_t)fs);  // 联调的时候去掉
+            Sigvector vec((uint16_t *)adc_value, (float32_t *)float_data,
+                          (float32_t *)fft_mag, SAMPLE);
+            vec.fft("hann");
 
-        }
+        }   // DIGITAL SIN
         else if (mode_select == 5) {    // ANALOG & DIGITAL
             double receive_num = 0;
             HMI_Receive_num(receive_num);

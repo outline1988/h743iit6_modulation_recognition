@@ -19,7 +19,8 @@ void main_cpp_old(uint8_t &mode_select, Gpio_control &digital_fm_am, Gpio_contro
 float32_t MAIN_determine_fc();
 float32_t MAIN_determine_fs(float32_t fc);
 float32_t MAIN_determine_ma(float32_t fs);
-float32_t MAIN_determine_mf(float32_t fs, float32_t &delta_f);
+float32_t MAIN_determine_mf(float32_t fs, float32_t &delta_f, float32_t height_l = 0.02, float32_t height_h = 1.5,
+                            float32_t min_peak_distance_factor = 0.1);
 uint8_t MAIN_determine_analog_modulation(float32_t fs, float32_t &freq_use);
 void MAIN_determine_dds(float32_t fc);
 uint8_t MAIN_determine_psk_rate(Sigvector<uint16_t> &vec, float32_t fs, float32_t &rate);
