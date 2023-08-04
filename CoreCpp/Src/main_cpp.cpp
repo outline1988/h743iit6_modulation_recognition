@@ -31,6 +31,10 @@ void MAIN_NEW_determine_rate(Sigvector<uint16_t> &vec, float32_t &rate, float32_
 uint8_t MAIN_NEW_determine_psk_fsk(Sigvector<uint16_t> &vec);
 uint8_t MAIN_NEW_determine_pskfsk_ask(const float32_t *f_data);
 
+void MAIN_NEW_ANALOG_MODE();
+void MAIN_NEW_DIGITAL_MODE();
+void MAIN_NEW_ANA_DIG_MODE();
+
 int main_cpp_analog_result() {
     RETARGET_Init(&huart1);
     ADC_CAPTURE_Init(&hadc1, &htim8);   // 带同采样PC4
@@ -85,6 +89,12 @@ int main_cpp_() {
     return 0;
 }
 
+Gpio_control digital_fm_am(GPIOC, GPIO_PIN_5, GPIOA, GPIO_PIN_3);
+Gpio_control psk_fsk_ask(GPIOA, GPIO_PIN_7, GPIOG, GPIO_PIN_3);
+Gpio_control onekhz_twokhz(GPIOA, GPIO_PIN_2, GPIOI, GPIO_PIN_8);
+Vca821_hand vca821_instance(&hdac1, DAC1_CHANNEL_1);
+float32_t fm_freq_use_record = 0;
+
 int main_cpp()  {
     RETARGET_Init(&huart1);
     ADC_CAPTURE_Init(&hadc1, &htim8, &hadc2);   // 带通采样PC4
@@ -98,221 +108,26 @@ int main_cpp()  {
     AD9834_Set_Freq(FREQ_0, 2e6 + AD9834_2_FREQ_ERROR);
 //    SI5351_SetCLK2(2e6 + SI5351_FREQ_ERROR);
 
-
-    Vca821_hand vca821_instance(&hdac1, DAC1_CHANNEL_1);
     vca821_instance.set_gainvalue(50);  // initial gain
-
-    Gpio_control digital_fm_am(GPIOC, GPIO_PIN_5, GPIOA, GPIO_PIN_3);
-    Gpio_control psk_fsk_ask(GPIOA, GPIO_PIN_7, GPIOG, GPIO_PIN_3);
-    Gpio_control onekhz_twokhz(GPIOA, GPIO_PIN_2, GPIOI, GPIO_PIN_8);
     onekhz_twokhz.write(0b01);
-
     uint8_t mode_select = 0;
     char msg[50] = {0};
-    float32_t fm_freq_use_record = 0;
+
     double ad9854_current_error = 26.1;
     while (true) {
 //        printf("hello, world\n");
         HMI_Mode(mode_select);
         main_cpp_old(mode_select, digital_fm_am, psk_fsk_ask);  // 旧模式
 
-
         if (mode_select == 3) {     // ANALOG
-            float32_t fs = 320e3;
-            double receive_num = 0;
-            HMI_Receive_num(receive_num);
-            if (std::abs(receive_num - 1) < 1e-3) {
-                float32_t freq_use = 0;
-                uint8_t is_am = MAIN_determine_analog_modulation(fs, freq_use);
-
-                char msg[50] = {0};
-                if (is_am == 1) {       // AM
-                    float32_t ma = MAIN_determine_ma(fs);
-                    HMI_AM_Transmit(freq_use, ma);
-
-                    if (digital_fm_am.get_command() != 0b10) {
-                        onekhz_twokhz.write(0b01);
-                        digital_fm_am.write(0b10);
-                    }
-                }
-                else if (is_am == 0) {      // FM
-                    float32_t delta_f = 0;
-                    float32_t mf = MAIN_determine_mf(fs, delta_f, 0.02, 1.5, 0.6);
-                    HMI_FM_Transmit(freq_use, mf);
-
-                    if (freq_use != fm_freq_use_record) {   // GPIO 1k 2k 窄带滤波器
-                        fm_freq_use_record = freq_use;
-                        if ( std::abs(freq_use - 1e3) < 50 ) {
-                            onekhz_twokhz.write(0b00);
-                        }
-                        else if (std::abs(freq_use - 2e3) < 50 ) {
-                            onekhz_twokhz.write(0b11);
-                        }
-                        else {
-                            onekhz_twokhz.write(0b01);
-                        }
-                    }
-                    if (digital_fm_am.get_command() != 0b01) {
-                        // 窄带滤波器
-                        AD9834_Set_Freq(FREQ_1, 3e6 + AD9834_3_FREQ_ERROR);
-                        digital_fm_am.write(0b01);
-                    }
-                }
-                else if (is_am == 2) {      // CW
-                    HMI_CW_Transmit();
-                }
-                MAIN_AGC_agc(vca821_instance);  // only analog should
-            }
+            MAIN_NEW_ANALOG_MODE();
         }   // ANALOG SIN
-
-
         else if (mode_select == 4) {    // DIGITAL
-            float32_t fs = 320e3;
-            float32_t rate = 0;
-            double receive_num = 0;
-            HMI_Receive_num(receive_num);
-            if (std::abs(receive_num - 1) < 1e-3) {
-                ADC1_CAPTURE_Capture((uint16_t *)adc_value, SAMPLE, (uint32_t)fs);  // 联调的时候去掉
-                Sigvector vec((uint16_t *)adc_value, (float32_t *)float_data,
-                              (float32_t *)fft_mag, SAMPLE);
-                vec.fft("hann");    // 联调的时候去掉
-
-                uint8_t pskfsk_ask = MAIN_NEW_determine_pskfsk_ask((float32_t *)float_data);
-                MAIN_NEW_determine_rate(vec, rate, fs);
-                if (pskfsk_ask == 0) {
-                    uint8_t psk_fsk = MAIN_NEW_determine_psk_fsk(vec);
-                    if (psk_fsk == 0) {     // PSK
-                        rate /= 2;
-                        vca821_instance.set_gainvalue(50);  // max gen
-
-                        HMI_PSK_Transmit(rate);
-
-                        if (digital_fm_am.get_command() != 0b00 || psk_fsk_ask.get_command() != 0b00) {
-                            onekhz_twokhz.write(0b01);
-                            digital_fm_am.write(0b00);
-                            psk_fsk_ask.write(0b00);
-
-                            AD9834_Set_Freq(FREQ_0, 2e6 + AD9834_2_FREQ_ERROR);
-                            SI5351_SetCLK2(2e6 + SI5351_FREQ_ERROR);
-                        }
-                    }
-                    else {      // FSK
-                        float32_t fsk_h = MAIN_measure_fsk_h(fs, rate);
-                        HMI_FSK_Transmit(rate, fsk_h);
-                        if (digital_fm_am.get_command() != 0b00 || psk_fsk_ask.get_command() != 0b01) {
-                            AD9834_Set_Freq(FREQ_1, 3e6 + AD9834_3_FREQ_ERROR);
-                            onekhz_twokhz.write(0b01);
-                            digital_fm_am.write(0b00);
-                            psk_fsk_ask.write(0b01);
-                        }
-                    }
-                }
-                else {      // ASK
-                    HMI_ASK_Transmit(rate);
-                    if (digital_fm_am.get_command() != 0b00 || psk_fsk_ask.get_command() != 0b10) {
-                        onekhz_twokhz.write(0b01);
-                        digital_fm_am.write(0b00);
-                        psk_fsk_ask.write(0b10);
-                    }
-                }
-            }
-
+            MAIN_NEW_DIGITAL_MODE();
         }   // DIGITAL SIN
-
         else if (mode_select == 5) {    // ANALOG & DIGITAL
-            double receive_num = 0;
-            HMI_Receive_num(receive_num);
-            if (std::abs(receive_num - 1) < 1e-3) {
-                float32_t fs = 320e3;
-                float32_t rate = 0;
-                ADC1_CAPTURE_Capture((uint16_t *)adc_value, SAMPLE, (uint32_t)fs);  // 联调的时候去掉
-                Sigvector vec((uint16_t *)adc_value, (float32_t *)float_data,
-                              (float32_t *)fft_mag, SAMPLE);
-                vec.fft("hann");
-
-                uint8_t mod_type = MAIN_NEW_determine_dig_psk_ana_rate(vec, fs, rate);
-                if (mod_type == 0) {    // ASK/FSK
-                    vca821_instance.set_gainvalue(50);  // max gen
-                    uint8_t ask_fsk = MAIN_determine_fsk_ask((float32_t *)float_data);
-                    if (ask_fsk == 0) {     // ASK
-                        HMI_ASK_Transmit(rate);
-                        if (digital_fm_am.get_command() != 0b00 || psk_fsk_ask.get_command() != 0b10) {
-                            onekhz_twokhz.write(0b01);
-                            digital_fm_am.write(0b00);
-                            psk_fsk_ask.write(0b10);
-                        }
-                    }   // ASK
-                    else if (ask_fsk == 1) {    // FSK
-                        float32_t fsk_h = MAIN_measure_fsk_h(fs, rate);
-                        HMI_FSK_Transmit(rate, fsk_h);
-
-                        if (digital_fm_am.get_command() != 0b00 || psk_fsk_ask.get_command() != 0b01) {
-                            AD9834_Set_Freq(FREQ_1, 3e6 + AD9834_3_FREQ_ERROR);
-                            onekhz_twokhz.write(0b01);
-                            digital_fm_am.write(0b00);
-                            psk_fsk_ask.write(0b01);
-                        }
-                    }   // FSK
-                }   // ASK/FSK
-                else if (mod_type == 1) {   // PSK
-                    vca821_instance.set_gainvalue(50);  // max gen
-                    HMI_PSK_Transmit(rate);
-                    if (digital_fm_am.get_command() != 0b00 || psk_fsk_ask.get_command() != 0b00) {
-                        onekhz_twokhz.write(0b01);
-                        digital_fm_am.write(0b00);
-                        psk_fsk_ask.write(0b00);
-//                        AD9854_SINSet(2e6, 4095);
-//                        SI5351_SetCLK2(2e6);
-
-                        AD9834_Set_Freq(FREQ_0, 2e6 + AD9834_2_FREQ_ERROR);
-                        SI5351_SetCLK2(2e6 + SI5351_FREQ_ERROR);
-                    }
-                }   // PSK
-                else if (mod_type == 2) {   // ANALOG
-                    float32_t freq_use = 0;
-                    uint8_t is_am = MAIN_determine_analog_modulation(fs, freq_use);
-
-                    if (is_am == 1) {       // AM
-                        float32_t ma = MAIN_determine_ma(fs);
-                        HMI_AM_Transmit(freq_use, ma);
-                        if (digital_fm_am.get_command() != 0b10) {
-                            onekhz_twokhz.write(0b01);
-                            digital_fm_am.write(0b10);
-                        }
-                    }
-                    else if (is_am == 0) {      // FM
-                        float32_t delta_f = 0;
-                        float32_t mf = MAIN_determine_mf(fs, delta_f);
-                        HMI_FM_Transmit(freq_use, mf);
-
-                        if (freq_use != fm_freq_use_record) {   // GPIO 1k 2k 窄带滤波器
-                            fm_freq_use_record = freq_use;
-                            if ( std::abs(freq_use - 1e3) < 50 ) {
-                                onekhz_twokhz.write(0b00);
-                            }
-                            else if (std::abs(freq_use - 2e3) < 50 ) {
-                                onekhz_twokhz.write(0b11);
-                            }
-                            else {
-                                onekhz_twokhz.write(0b01);
-                            }
-                        }
-                        if (digital_fm_am.get_command() != 0b01) {
-                            // 窄带
-                            AD9834_Set_Freq(FREQ_1, 3e6 + AD9834_3_FREQ_ERROR);
-                            digital_fm_am.write(0b01);
-                        }
-                    }
-                    else if (is_am == 2) {
-//                        vec.fft_print();    HAL_Delay(400);
-                        HMI_CW_Transmit();
-                    }
-                    MAIN_AGC_agc(vca821_instance);  // only analog should
-                }   // ANALOG
-            }
-
+            MAIN_NEW_ANA_DIG_MODE();
         }   // ANALOG & DIGITAL
-
         else if (mode_select == 6) {
             double receive_num = 200;
             HMI_Receive_num(receive_num);
@@ -322,35 +137,11 @@ int main_cpp()  {
                 AD9834_Set_Freq(FREQ_0, 2e6 + AD9834_2_FREQ_ERROR);
             }
         }   // CALIBRATION
-        HAL_Delay(100);
+        HAL_Delay(50);
     }
     return 0;
 }
 
-int main_cpp_agc() {
-    RETARGET_Init(&huart1);
-    ADC_CAPTURE_Init(&hadc1, &htim8, &hadc2);   // 带通采样PC4
-    ADC_EXTCAPTURE_Init(&hadc3, &hi2c3);
-    Vca821_hand vca821_instance(&hdac1, DAC1_CHANNEL_1);
-    vca821_instance.set_gainvalue(1 / 2.28 * 25);  // initial gain
-//    Gpio_control digital_fm_am(GPIOI, GPIO_PIN_11, GPIOC, GPIO_PIN_5);
-//    Gpio_control psk_fsk_ask(GPIOG, GPIO_PIN_3, GPIOA, GPIO_PIN_7);
-    while (true) {
-        MAIN_AGC_agc(vca821_instance);
-
-
-//        ADC2_CAPTURE_Capture((uint16_t *)adc_value, SAMPLE, 30e3);
-//        Sigvector vec((uint16_t *)adc_value, (float32_t *)float_data,
-//                      (float32_t *)fft_mag, SAMPLE);
-//
-//        vec.fft("hann");      // default rectangle win and center
-//        vec.fft_print();
-
-        printf("\n\n");
-        HAL_Delay(100);
-    }
-    return 0;
-}
 
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
@@ -481,5 +272,203 @@ uint8_t MAIN_NEW_determine_psk_fsk(Sigvector<uint16_t> &vec) {
     }
 }
 
+void MAIN_NEW_ANALOG_MODE() {
+    float32_t fs = 320e3;
+    double receive_num = 0;
+    HMI_Receive_num(receive_num);
+    if (std::abs(receive_num - 1) < 1e-3) {
+        float32_t freq_use = 0;
+        uint8_t is_am = MAIN_determine_analog_modulation(fs, freq_use);
 
+        char msg[50] = {0};
+        if (is_am == 1) {       // AM
+            float32_t ma = MAIN_determine_ma(fs);
+            HMI_AM_Transmit(freq_use, ma);
+
+            if (digital_fm_am.get_command() != 0b10) {
+                onekhz_twokhz.write(0b01);
+                digital_fm_am.write(0b10);
+            }
+        }
+        else if (is_am == 0) {      // FM
+            float32_t delta_f = 0;
+            float32_t mf = MAIN_determine_mf(fs, delta_f, 0.1, 1.5, 0.6);
+            HMI_FM_Transmit(freq_use, mf);
+
+            if (freq_use != fm_freq_use_record) {   // GPIO 1k 2k 窄带滤波器
+                fm_freq_use_record = freq_use;
+                if ( std::abs(freq_use - 1e3) < 500 ) {
+                    onekhz_twokhz.write(0b00);
+                }
+                else if (std::abs(freq_use - 2e3) < 500 || std::abs(freq_use - 3e3) < 500) {
+                    onekhz_twokhz.write(0b11);
+                }
+                else if (std::abs(freq_use - 4e3) < 500 || std::abs(freq_use - 5e3) < 500) {
+                    onekhz_twokhz.write(0b10);
+                }
+                else {
+                    onekhz_twokhz.write(0b01);
+                }
+            }
+            if (digital_fm_am.get_command() != 0b01) {
+                // 窄带滤波器
+                AD9834_Set_Freq(FREQ_1, 3e6 + AD9834_3_FREQ_ERROR);
+                digital_fm_am.write(0b01);
+            }
+        }
+        else if (is_am == 2) {      // CW
+            HMI_CW_Transmit();
+        }
+        MAIN_AGC_agc(vca821_instance);  // only analog should
+    }
+}
+
+void MAIN_NEW_DIGITAL_MODE() {
+    float32_t fs = 320e3;
+    float32_t rate = 0;
+    double receive_num = 0;
+    HMI_Receive_num(receive_num);
+    if (std::abs(receive_num - 1) < 1e-3) {
+        ADC1_CAPTURE_Capture((uint16_t *)adc_value, SAMPLE, (uint32_t)fs);  // 联调的时候去掉
+        Sigvector vec((uint16_t *)adc_value, (float32_t *)float_data,
+                      (float32_t *)fft_mag, SAMPLE);
+        vec.fft("hann");    // 联调的时候去掉
+
+        uint8_t pskfsk_ask = MAIN_NEW_determine_pskfsk_ask((float32_t *)float_data);
+        MAIN_NEW_determine_rate(vec, rate, fs);
+        if (pskfsk_ask == 0) {
+            uint8_t psk_fsk = MAIN_NEW_determine_psk_fsk(vec);
+            if (psk_fsk == 0) {     // PSK
+                rate /= 2;
+                vca821_instance.set_gainvalue(50);  // max gen
+
+                HMI_PSK_Transmit(rate);
+
+                if (digital_fm_am.get_command() != 0b00 || psk_fsk_ask.get_command() != 0b00) {
+                    onekhz_twokhz.write(0b01);
+                    digital_fm_am.write(0b00);
+                    psk_fsk_ask.write(0b00);
+
+                    AD9834_Set_Freq(FREQ_0, 2e6 + AD9834_2_FREQ_ERROR);
+                    SI5351_SetCLK2(2e6 + SI5351_FREQ_ERROR);
+                }
+            }
+            else {      // FSK
+                float32_t fsk_h = MAIN_measure_fsk_h(fs, rate);
+                HMI_FSK_Transmit(rate, fsk_h);
+                if (digital_fm_am.get_command() != 0b00 || psk_fsk_ask.get_command() != 0b01) {
+                    AD9834_Set_Freq(FREQ_1, 3e6 + AD9834_3_FREQ_ERROR);
+                    onekhz_twokhz.write(0b01);
+                    digital_fm_am.write(0b00);
+                    psk_fsk_ask.write(0b01);
+                }
+            }
+        }
+        else {      // ASK
+            HMI_ASK_Transmit(rate);
+            if (digital_fm_am.get_command() != 0b00 || psk_fsk_ask.get_command() != 0b10) {
+                onekhz_twokhz.write(0b01);
+                digital_fm_am.write(0b00);
+                psk_fsk_ask.write(0b10);
+            }
+        }
+    }
+}
+
+void MAIN_NEW_ANA_DIG_MODE() {
+    double receive_num = 0;
+    HMI_Receive_num(receive_num);
+    if (std::abs(receive_num - 1) < 1e-3) {
+        float32_t fs = 320e3;
+        float32_t rate = 0;
+        ADC1_CAPTURE_Capture((uint16_t *)adc_value, SAMPLE, (uint32_t)fs);  // 联调的时候去掉
+        Sigvector vec((uint16_t *)adc_value, (float32_t *)float_data,
+                      (float32_t *)fft_mag, SAMPLE);
+        vec.fft("hann");
+
+        uint8_t mod_type = MAIN_NEW_determine_dig_psk_ana_rate(vec, fs, rate);
+        if (mod_type == 0) {    // ASK/FSK
+            vca821_instance.set_gainvalue(50);  // max gen
+            uint8_t ask_fsk = MAIN_determine_fsk_ask((float32_t *)float_data);
+            if (ask_fsk == 0) {     // ASK
+                HMI_ASK_Transmit(rate);
+                if (digital_fm_am.get_command() != 0b00 || psk_fsk_ask.get_command() != 0b10) {
+                    onekhz_twokhz.write(0b01);
+                    digital_fm_am.write(0b00);
+                    psk_fsk_ask.write(0b10);
+                }
+            }   // ASK
+            else if (ask_fsk == 1) {    // FSK
+                float32_t fsk_h = MAIN_measure_fsk_h(fs, rate);
+                HMI_FSK_Transmit(rate, fsk_h);
+
+                if (digital_fm_am.get_command() != 0b00 || psk_fsk_ask.get_command() != 0b01) {
+                    AD9834_Set_Freq(FREQ_1, 3e6 + AD9834_3_FREQ_ERROR);
+                    onekhz_twokhz.write(0b01);
+                    digital_fm_am.write(0b00);
+                    psk_fsk_ask.write(0b01);
+                }
+            }   // FSK
+        }   // ASK/FSK
+        else if (mod_type == 1) {   // PSK
+            vca821_instance.set_gainvalue(50);  // max gen
+            HMI_PSK_Transmit(rate);
+            if (digital_fm_am.get_command() != 0b00 || psk_fsk_ask.get_command() != 0b00) {
+                onekhz_twokhz.write(0b01);
+                digital_fm_am.write(0b00);
+                psk_fsk_ask.write(0b00);
+//                        AD9854_SINSet(2e6, 4095);
+//                        SI5351_SetCLK2(2e6);
+
+                AD9834_Set_Freq(FREQ_0, 2e6 + AD9834_2_FREQ_ERROR);
+                SI5351_SetCLK2(2e6 + SI5351_FREQ_ERROR);
+            }
+        }   // PSK
+        else if (mod_type == 2) {   // ANALOG
+            float32_t freq_use = 0;
+            uint8_t is_am = MAIN_determine_analog_modulation(fs, freq_use);
+
+            if (is_am == 1) {       // AM
+                float32_t ma = MAIN_determine_ma(fs);
+                HMI_AM_Transmit(freq_use, ma);
+                if (digital_fm_am.get_command() != 0b10) {
+                    onekhz_twokhz.write(0b01);
+                    digital_fm_am.write(0b10);
+                }
+            }
+            else if (is_am == 0) {      // FM
+                float32_t delta_f = 0;
+                float32_t mf = MAIN_determine_mf(fs, delta_f, 0.1, 1.5, 0.6);
+                HMI_FM_Transmit(freq_use, mf);
+
+                if (freq_use != fm_freq_use_record) {   // GPIO 1k 2k 窄带滤波器
+                    fm_freq_use_record = freq_use;
+                    if ( std::abs(freq_use - 1e3) < 500 ) {
+                        onekhz_twokhz.write(0b00);
+                    }
+                    else if (std::abs(freq_use - 2e3) < 500 || std::abs(freq_use - 3e3) < 500) {
+                        onekhz_twokhz.write(0b11);
+                    }
+                    else if (std::abs(freq_use - 4e3) < 500 || std::abs(freq_use - 5e3) < 500) {
+                        onekhz_twokhz.write(0b10);
+                    }
+                    else {
+                        onekhz_twokhz.write(0b01);
+                    }
+                }
+                if (digital_fm_am.get_command() != 0b01) {
+                    // 窄带
+                    AD9834_Set_Freq(FREQ_1, 3e6 + AD9834_3_FREQ_ERROR);
+                    digital_fm_am.write(0b01);
+                }
+            }
+            else if (is_am == 2) {
+//                        vec.fft_print();    HAL_Delay(400);
+                HMI_CW_Transmit();
+            }
+            MAIN_AGC_agc(vca821_instance);  // only analog should
+        }   // ANALOG
+    }
+
+}
 
