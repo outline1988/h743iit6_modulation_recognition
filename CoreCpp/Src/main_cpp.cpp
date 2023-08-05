@@ -23,6 +23,8 @@ __attribute__((section ("._dma_buffer"))) volatile uint16_t adc_value[SAMPLE * 4
 __attribute__((section ("._dma_buffer"))) volatile float32_t float_data[SAMPLE * 4];
 __attribute__((section ("._dma_buffer"))) volatile float32_t fft_mag[SAMPLE * 4];
 
+
+
 //__attribute__((section ("._dma_buffer"))) volatile struct compx adc_value_complex[SAMPLE * 4];
 
 uint8_t MAIN_NEW_determine_dig_psk_ana_rate(Sigvector<uint16_t> &vec, float32_t fs, float32_t &rate);
@@ -260,8 +262,11 @@ void MAIN_NEW_ANALOG_MODE() {
     HMI_Receive_num(receive_num);
     if (std::abs(receive_num - 1) < 1e-3) {
         float32_t freq_use = 0;
-        uint8_t is_am = MAIN_determine_analog_modulation(fs, freq_use);
-
+        uint8_t is_am_array[3] = {3, 3, 3};
+        for (uint8_t i = 0; i < 3; ++i) {
+            is_am_array[i] = MAIN_determine_analog_modulation(fs, freq_use);
+        }
+        uint8_t is_am = (is_am_array[0] == is_am_array[1]) && (is_am_array[1] == is_am_array[2]) ? is_am_array[0] : 3;
         char msg[50] = {0};
         if (is_am == 1) {       // AM
             float32_t ma = MAIN_determine_ma(fs);
