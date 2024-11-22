@@ -348,6 +348,7 @@ float32_t Sigvector<T>::cal_freq(float32_t f_s, uint32_t side_num) {
     return cal_freq(index, f_s, side_num);
 }
 
+
 /**
  * cal vpp by rms of discrete PSD
  * @param index default find max index or you give the index
@@ -373,7 +374,7 @@ float32_t Sigvector<T>::fft_vpp() {
 
 /**
  * find all the peaks in spectrum, the peaks are met with condition you input.
- * @param min_peak_distance from top to bottom, remove the lower peaks whose horizontal distance with
+ * @param min_pe ak_distance from top to bottom, remove the lower peaks whose horizontal distance with
  *                          higher peak is less than the arg.
  * @param threshold_l the peak's neighbors which horizontal distance is 1. the vertical distance is higher than threshold_l.
  *                      [0, 1, 0] is n but [0, 2, 0] is y if threshold_l = 1

@@ -190,7 +190,7 @@ void HMI_FSK_Transmit(float32_t rate, float32_t fsk_h) {
     sprintf(msg__, "rate: %d", (int)std::round(rate));
     HMI_TXT_Transmit(msg__, 1);
 
-    ftoa((double)fsk_h, float_data_, 3);
+    ftoa((double)fsk_h, float_data_, 6);
     sprintf(msg__, "h: %s", float_data_);
     HMI_TXT_Transmit(msg__, 2);
 }
@@ -240,10 +240,15 @@ void ftoa(double f_num, char *msg, int point_num) {
     int int_num = (int)f_num;
     double point = (f_num - (double)int_num);
     if (int_num == 0) {
+//        msg[0] = '0';
+//        msg[1] = '.';
+//        int temp = (int)(point * (double)pow(10, point_num));
+//        itoa((int)(temp), msg + 2, 10);
+        int_num = 1;
+        int_num = (int_num + point / 10) * pow(10, point_num + 1);
+        itoa(int_num, msg, 10);
+        msg[strlen(msg) - point_num - 1] = '.';
         msg[0] = '0';
-        msg[1] = '.';
-        int temp = (int)(point * (double)pow(10, point_num));
-        itoa((int)(temp), msg + 2, 10);
     }
     else {
         int_num = (int_num + point / 10) * pow(10, point_num + 1);

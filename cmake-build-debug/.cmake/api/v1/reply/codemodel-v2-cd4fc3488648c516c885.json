@@ -1,0 +1,60 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"jsonFile" : "directory-.-Debug-d0094a50bb2071803777.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.25"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						0
+					]
+				}
+			],
+			"name" : "Debug",
+			"projects" : 
+			[
+				{
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "h743iit6_modulation_recognition",
+					"targetIndexes" : 
+					[
+						0
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "h743iit6_modulation_recognition.elf::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-h743iit6_modulation_recognition.elf-Debug-7e02dc3e3e3a6052b602.json",
+					"name" : "h743iit6_modulation_recognition.elf",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "E:/Hardware/CubeMX_Clion/h743iit6_project/h743iit6_modulation_recognition/cmake-build-debug",
+		"source" : "E:/Hardware/CubeMX_Clion/h743iit6_project/h743iit6_modulation_recognition"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 5
+	}
+}

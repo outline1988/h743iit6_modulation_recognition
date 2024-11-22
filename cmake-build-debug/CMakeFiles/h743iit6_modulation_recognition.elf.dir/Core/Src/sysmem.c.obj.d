@@ -1,0 +1,20 @@
+CMakeFiles/h743iit6_modulation_recognition.elf.dir/Core/Src/sysmem.c.obj: \
+ E:\Hardware\CubeMX_Clion\h743iit6_project\h743iit6_modulation_recognition\Core\Src\sysmem.c \
+ d:\stmcube\gcc-arm-none-eabi\arm-none-eabi\include\errno.h \
+ d:\stmcube\gcc-arm-none-eabi\arm-none-eabi\include\sys\errno.h \
+ d:\stmcube\gcc-arm-none-eabi\arm-none-eabi\include\sys\reent.h \
+ d:\stmcube\gcc-arm-none-eabi\arm-none-eabi\include\_ansi.h \
+ d:\stmcube\gcc-arm-none-eabi\arm-none-eabi\include\newlib.h \
+ d:\stmcube\gcc-arm-none-eabi\arm-none-eabi\include\_newlib_version.h \
+ d:\stmcube\gcc-arm-none-eabi\arm-none-eabi\include\sys\config.h \
+ d:\stmcube\gcc-arm-none-eabi\arm-none-eabi\include\machine\ieeefp.h \
+ d:\stmcube\gcc-arm-none-eabi\arm-none-eabi\include\sys\features.h \
+ d:\stmcube\gcc-arm-none-eabi\lib\gcc\arm-none-eabi\10.3.1\include\stddef.h \
+ d:\stmcube\gcc-arm-none-eabi\arm-none-eabi\include\sys\_types.h \
+ d:\stmcube\gcc-arm-none-eabi\arm-none-eabi\include\machine\_types.h \
+ d:\stmcube\gcc-arm-none-eabi\arm-none-eabi\include\machine\_default_types.h \
+ d:\stmcube\gcc-arm-none-eabi\arm-none-eabi\include\sys\lock.h \
+ d:\stmcube\gcc-arm-none-eabi\lib\gcc\arm-none-eabi\10.3.1\include\stdint.h \
+ d:\stmcube\gcc-arm-none-eabi\arm-none-eabi\include\stdint.h \
+ d:\stmcube\gcc-arm-none-eabi\arm-none-eabi\include\sys\_intsup.h \
+ d:\stmcube\gcc-arm-none-eabi\arm-none-eabi\include\sys\_stdint.h

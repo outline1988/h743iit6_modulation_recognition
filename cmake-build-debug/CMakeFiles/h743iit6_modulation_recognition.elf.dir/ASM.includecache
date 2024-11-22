@@ -1,0 +1,10 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+E:/Hardware/CubeMX_Clion/h743iit6_project/h743iit6_modulation_recognition/Core/Startup/startup_stm32h743iitx.s
+

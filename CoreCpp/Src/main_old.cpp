@@ -190,11 +190,11 @@ float32_t MAIN_determine_ma(float32_t fs) {
     vec.select_peaks(0.05, 1.5);
 
     float32_t ma = vec.cal_ma();
-    if (ma > 0.6) {
-        vec.fft("flattop");
-        vec.select_peaks(0.05, 1.5);
-        return vec.cal_ma();
-    }
+//    if (ma > 0.6) {
+//        vec.fft("flattop");
+//        vec.select_peaks(0.05, 1.5);
+//        return vec.cal_ma();
+//    }
     return ma;
 }
 

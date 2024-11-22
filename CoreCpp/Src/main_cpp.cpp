@@ -33,10 +33,13 @@ void MAIN_NEW_determine_rate(Sigvector<uint16_t> &vec, float32_t &rate, float32_
 uint8_t MAIN_NEW_determine_psk_fsk(Sigvector<uint16_t> &vec);
 uint8_t MAIN_NEW_determine_pskfsk_ask(const float32_t *f_data);
 
+
 void MAIN_NEW_ANALOG_MODE();
 void MAIN_NEW_DIGITAL_MODE();
 void MAIN_NEW_ANA_DIG_MODE();
 void MAIN_NEW_SPECTRUM();
+
+uint8_t MAIN_NEW_determine_psk_fsk_ask(float32_t &rate, float32_t fs);
 
 
 int main_cpp__() {
@@ -84,7 +87,7 @@ int main_cpp()  {
     vca821_instance.set_gainvalue(50);  // initial gain
     onekhz_twokhz.write(0b01);
     uint8_t mode_select = 0;
-    char msg[50] = {0};
+//    char msg[50] = {0};
 
     double ad9854_current_error = 26.1;
     while (true) {
@@ -206,6 +209,7 @@ uint8_t MAIN_NEW_determine_pskfsk_ask(const float32_t *f_data) {
     for (uint32_t i = 0; i < SAMPLE; ++i) {
         accumulate_result += std::abs(f_data[i]) / max_time_val;
     }
+
     if (accumulate_result > 1000) {
         return 0;   // FSK  PSK
     }
@@ -255,6 +259,7 @@ uint8_t MAIN_NEW_determine_psk_fsk(Sigvector<uint16_t> &vec) {
         return 1;
     }
 }
+float32_t agc_fs = 12e6;
 
 void MAIN_NEW_ANALOG_MODE() {
     float32_t fs = 320e3;
@@ -267,9 +272,12 @@ void MAIN_NEW_ANALOG_MODE() {
             is_am_array[i] = MAIN_determine_analog_modulation(fs, freq_use);
         }
         uint8_t is_am = (is_am_array[0] == is_am_array[1]) && (is_am_array[1] == is_am_array[2]) ? is_am_array[0] : 3;
+//        uint8_t is_am = MAIN_determine_analog_modulation(fs, freq_use);
         char msg[50] = {0};
+//        agc_fs = freq_use > freq_use * 10;
         if (is_am == 1) {       // AM
             float32_t ma = MAIN_determine_ma(fs);
+            ma += 0.007;
             HMI_AM_Transmit(freq_use, ma);
 
             if (digital_fm_am.get_command() != 0b10) {
@@ -280,6 +288,10 @@ void MAIN_NEW_ANALOG_MODE() {
         else if (is_am == 0) {      // FM
             float32_t delta_f = 0;
             float32_t mf = MAIN_determine_mf(fs, delta_f, 0.1, 1.5, 0.6);
+            float_t freq_use_nocor = delta_f / mf;
+            if ( std::abs(freq_use_nocor - freq_use) / freq_use_nocor > 0.5 ) {
+                freq_use = freq_use_nocor - 8;
+            }
             HMI_FM_Transmit(freq_use, mf);
 
             if (freq_use != fm_freq_use_record) {   // GPIO 1k 2k 窄带滤波器
@@ -316,20 +328,23 @@ void MAIN_NEW_DIGITAL_MODE() {
     double receive_num = 0;
     HMI_Receive_num(receive_num);
     if (std::abs(receive_num - 1) < 1e-3) {
-        ADC1_CAPTURE_Capture((uint16_t *)adc_value, SAMPLE, (uint32_t)fs);  // 联调的时候去掉
-        Sigvector vec((uint16_t *)adc_value, (float32_t *)float_data,
-                      (float32_t *)fft_mag, SAMPLE);
-        vec.fft("hann");    // 联调的时候去掉
+        uint8_t digital_type_array[3] = {3, 3, 3};
+        for (uint8_t i = 0; i < 3; ++i) {
+            digital_type_array[i] = MAIN_NEW_determine_psk_fsk_ask(rate, fs);
+        }
+        rate *= 2;
+        uint8_t digital_type = (digital_type_array[0] == digital_type_array[1]) &&
+                (digital_type_array[1] == digital_type_array[2]) ?
+                digital_type_array[0] : 3;
 
-        uint8_t pskfsk_ask = MAIN_NEW_determine_pskfsk_ask((float32_t *)float_data);
-        MAIN_NEW_determine_rate(vec, rate, fs);
-        if (pskfsk_ask == 0) {
-            uint8_t psk_fsk = MAIN_NEW_determine_psk_fsk(vec);
-            if (psk_fsk == 0) {     // PSK
-                rate /= 2;
-                vca821_instance.set_gainvalue(50);  // max gen
+//        uint8_t digital_type = MAIN_NEW_determine_psk_fsk_ask(vec, rate, fs);
+
+
+        if (digital_type == 0) {    // PSK
+            vca821_instance.set_gainvalue(50);  // max gen
 
                 HMI_PSK_Transmit(rate);
+//                printf("psk: %d\n", (int)rate);
 
                 if (digital_fm_am.get_command() != 0b00 || psk_fsk_ask.get_command() != 0b00) {
                     onekhz_twokhz.write(0b01);
@@ -339,26 +354,66 @@ void MAIN_NEW_DIGITAL_MODE() {
                     AD9834_Set_Freq(FREQ_0, 2e6 + AD9834_2_FREQ_ERROR);
                     SI5351_SetCLK2(2e6 + SI5351_FREQ_ERROR);
                 }
-            }
-            else {      // FSK
-                float32_t fsk_h = MAIN_measure_fsk_h(fs, rate);
-                HMI_FSK_Transmit(rate, fsk_h);
-                if (digital_fm_am.get_command() != 0b00 || psk_fsk_ask.get_command() != 0b01) {
-                    AD9834_Set_Freq(FREQ_1, 3e6 + AD9834_3_FREQ_ERROR);
-                    onekhz_twokhz.write(0b01);
-                    digital_fm_am.write(0b00);
-                    psk_fsk_ask.write(0b01);
-                }
+        }
+        else if (digital_type == 1) {       // FSK
+            float32_t fsk_h = MAIN_measure_fsk_h(fs, rate);
+            HMI_FSK_Transmit(rate, fsk_h);
+//            printf("fsk: %d h: %d\n", (int)rate, (int)(fsk_h * 1000) );
+            if (digital_fm_am.get_command() != 0b00 || psk_fsk_ask.get_command() != 0b01) {
+                AD9834_Set_Freq(FREQ_1, 3e6 + AD9834_3_FREQ_ERROR);
+                onekhz_twokhz.write(0b01);
+                digital_fm_am.write(0b00);
+                psk_fsk_ask.write(0b01);
             }
         }
-        else {      // ASK
+        else if (digital_type == 2) {   // ASK
             HMI_ASK_Transmit(rate);
+//            printf("ask: %d\n", int(rate));
             if (digital_fm_am.get_command() != 0b00 || psk_fsk_ask.get_command() != 0b10) {
                 onekhz_twokhz.write(0b01);
                 digital_fm_am.write(0b00);
                 psk_fsk_ask.write(0b10);
             }
         }
+
+//        uint8_t pskfsk_ask = MAIN_NEW_determine_pskfsk_ask((float32_t *)float_data);
+//        MAIN_NEW_determine_rate(vec, rate, fs);
+//        if (pskfsk_ask == 0) {
+//            uint8_t psk_fsk = MAIN_NEW_determine_psk_fsk(vec);
+//            if (psk_fsk == 0) {     // PSK
+//                rate /= 2;
+//                vca821_instance.set_gainvalue(50);  // max gen
+//
+//                HMI_PSK_Transmit(rate);
+//
+//                if (digital_fm_am.get_command() != 0b00 || psk_fsk_ask.get_command() != 0b00) {
+//                    onekhz_twokhz.write(0b01);
+//                    digital_fm_am.write(0b00);
+//                    psk_fsk_ask.write(0b00);
+//
+//                    AD9834_Set_Freq(FREQ_0, 2e6 + AD9834_2_FREQ_ERROR);
+//                    SI5351_SetCLK2(2e6 + SI5351_FREQ_ERROR);
+//                }
+//            }
+//            else {      // FSK
+//                float32_t fsk_h = MAIN_measure_fsk_h(fs, rate);
+//                HMI_FSK_Transmit(rate, fsk_h);
+//                if (digital_fm_am.get_command() != 0b00 || psk_fsk_ask.get_command() != 0b01) {
+//                    AD9834_Set_Freq(FREQ_1, 3e6 + AD9834_3_FREQ_ERROR);
+//                    onekhz_twokhz.write(0b01);
+//                    digital_fm_am.write(0b00);
+//                    psk_fsk_ask.write(0b01);
+//                }
+//            }
+//        }
+//        else {      // ASK
+//            HMI_ASK_Transmit(rate);
+//            if (digital_fm_am.get_command() != 0b00 || psk_fsk_ask.get_command() != 0b10) {
+//                onekhz_twokhz.write(0b01);
+//                digital_fm_am.write(0b00);
+//                psk_fsk_ask.write(0b10);
+//            }
+//        }
     }
 }
 
@@ -475,3 +530,24 @@ void MAIN_NEW_SPECTRUM() {
     }
 }
 
+uint8_t MAIN_NEW_determine_psk_fsk_ask(float32_t &rate, float32_t fs) {
+    ADC1_CAPTURE_Capture((uint16_t *)adc_value, SAMPLE, (uint32_t)fs);  // 联调的时候去掉
+    Sigvector vec((uint16_t *)adc_value, (float32_t *)float_data,
+                  (float32_t *)fft_mag, SAMPLE);
+    vec.fft("hann");    // 联调的时候去掉
+    uint8_t pskfsk_ask = MAIN_NEW_determine_pskfsk_ask((float32_t *)float_data);
+    MAIN_NEW_determine_rate(vec, rate, fs);
+    if (pskfsk_ask == 0) {
+        uint8_t psk_fsk = MAIN_NEW_determine_psk_fsk(vec);
+        if (psk_fsk == 0) {     // PSK
+            rate /= 2;
+            return 0;
+        }
+        else {      // FSK
+            return 1;
+        }
+    }
+    else {      // ASK
+        return 2;
+    }
+}
